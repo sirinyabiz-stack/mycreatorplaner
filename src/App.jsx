@@ -932,7 +932,6 @@ function PublishedView() {
   return (
     <div className="space-y-4">
       <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 rounded-2xl text-xs font-medium border border-emerald-100 dark:border-emerald-900">
-        💡 หน้ารวมผลงานที่เผยแพร่แล้วโดยอัตโนมัติ (ระบบดึงข้อมูลมาจาก Content Plan ที่เซ็ตสถานะเป็น "เผยแพร่แล้ว") คุณไม่สามารถเพิ่มข้อมูลตรงจากหน้านี้ได้
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
