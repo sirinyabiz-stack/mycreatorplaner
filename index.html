@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Content Creator Plan</title>
+    <!-- โหลด Tailwind CSS CDN เพื่อรับประกันว่าดีไซน์จะไม่เบี้ยวแน่นอน -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // ตั้งค่า Tailwind เพิ่มเติม เพื่อรองรับ Dark Mode แบบ class
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              slate: {
+                950: '#0b1329',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* เพิ่มฟอนต์สวยๆ สไตล์ Minimal Planner */
+      @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
+      body {
+        font-family: 'Sarabun', sans-serif;
+      }
+      /* อนิเมชันสวยๆ */
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fadeIn {
+        animation: fadeIn 0.3s ease-out forwards;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
