@@ -216,7 +216,7 @@ const initialMockData = {
   journals: [
     { id: '1', title: 'ไอเดียช่อง พยายามจะเก่งขึ้นวันละนิด', content: 'ทำคลิปแชร์ทริคพัฒนาตัวเองวันละ 1 ข้อ สั้นๆ เข้าใจง่าย เล่าเรื่องแบบ Planner', date: '2026-05-19', tag: '#Mindset', pinned: true }
   ],
-  pin: '1234',
+  pin: 'pom1234',
   isSetup: true
 };
 
