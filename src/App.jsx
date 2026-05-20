@@ -398,7 +398,7 @@ function AuthScreen({ db, setDb, onLogin }) {
           <input
             type="password"
             maxLength={10}
-            placeholder={isFirstTime ? 'ตั้งรหัสผ่าน (เช่น 1234)' : 'กรอกรหัสผ่าน'}
+            placeholder={isFirstTime ? 'ตั้งรหัสผ่าน (เช่น pom1234)' : 'กรอกรหัสผ่าน'}
             value={pin}
             onChange={(e) => { setPin(e.target.value); setError(''); }}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 text-center text-xl font-bold tracking-widest focus:ring-2 focus:ring-blue-500 outline-none"
