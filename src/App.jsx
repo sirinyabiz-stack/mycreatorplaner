@@ -119,6 +119,7 @@ function TrashIcon() {
   );
 }
 
+// โน้ตย่อ: ไอคอนแก้ไขข้อมูล
 function EditIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5 text-blue-500">
@@ -210,9 +211,10 @@ const initialMockData = {
     { id: '1', name: 'กะปอมรีวิว', platform: 'TikTok', link: 'https://tiktok.com', description: 'ช่องรีวิวของใช้มินิมอลและไอที', followers: '15,000', category: 'Gadget / Lifestyle' }
   ],
   products: [
-    { id: '1', name: 'ขาตั้ง iPad Premium', source: 'ซื้อเอง', price: '350', dateReceived: '2026-05-10', note: 'วัสดุอลูมิเนียม แข็งแรงมาก' },
-    { id: '2', name: 'โคมไฟมินิมอล', source: 'Sponsor', price: '0', dateReceived: '2026-05-12', note: 'สปอนเซอร์ส่งมาให้ช่วยทำคลิป' }
+    { id: '1', name: 'ขาตั้ง iPad Premium', source: 'ซื้อเอง', price: '350', dateReceived: '2026-05-10', note: 'วัสดุอลูมิเนียม แข็งแรงมาก', category: 'ไอที & แกดเจ็ต' },
+    { id: '2', name: 'โคมไฟมินิมอล', source: 'Sponsor', price: '0', dateReceived: '2026-05-12', note: 'สปอนเซอร์ส่งมาให้ช่วยทำคลิป', category: 'ตกแต่งบ้าน' }
   ],
+  productCategories: ['ไอที & แกดเจ็ต', 'ตกแต่งห้อง', 'เครื่องเขียน', 'เสื้อผ้า / แฟชั่น'],
   journals: [
     { id: '1', title: 'ไอเดียช่อง พยายามจะเก่งขึ้นวันละนิด', content: 'ทำคลิปแชร์ทริคพัฒนาตัวเองวันละ 1 ข้อ สั้นๆ เข้าใจง่าย เล่าเรื่องแบบ Planner', date: '2026-05-19', tag: '#Mindset', pinned: true }
   ],
@@ -232,7 +234,14 @@ const safeLocalStorage = {
 export default function App() {
   const [db, setDb] = useState(() => {
     const saved = safeLocalStorage.getItem('creator_planner_db');
-    return saved ? JSON.parse(saved) : initialMockData;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (!parsed.productCategories) {
+        parsed.productCategories = initialMockData.productCategories;
+      }
+      return parsed;
+    }
+    return initialMockData;
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -424,7 +433,6 @@ function DashboardView() {
 
   return (
     <div className="space-y-6">
-      {/* SUMMARY STATS */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { label: 'งานทั้งหมด', count: total, color: 'border-slate-200 bg-white dark:bg-slate-800' },
@@ -441,7 +449,6 @@ function DashboardView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* RECENT PLANS */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl border dark:border-slate-700 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-base">ตารางคอนเทนต์ล่าสุด</h3>
@@ -464,7 +471,6 @@ function DashboardView() {
           </div>
         </div>
 
-        {/* QUICK JOURNAL */}
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border dark:border-slate-700 shadow-sm flex flex-col justify-between">
           <div>
             <h3 className="font-bold text-base mb-3">บันทึกไอเดียด่วน</h3>
@@ -491,7 +497,7 @@ function DashboardView() {
 function CalendarView() {
   const { db, darkMode } = useContext(AppContext);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('month'); // 'month' | 'week' | 'day'
+  const [viewMode, setViewMode] = useState('month');
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -538,7 +544,6 @@ function CalendarView() {
     }
   };
 
-  // --- RENDER MONTH VIEW ---
   const renderMonthView = () => {
     const blanks = Array(firstDay).fill(null);
     const dayCells = Array.from({ length: totalDays }, (_, i) => i + 1);
@@ -577,7 +582,6 @@ function CalendarView() {
     );
   };
 
-  // --- RENDER WEEK VIEW ---
   const renderWeekView = () => {
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
@@ -618,7 +622,6 @@ function CalendarView() {
     );
   };
 
-  // --- RENDER DAY VIEW ---
   const renderDayView = () => {
     const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
     const dayEvents = db.contents.filter(c => c.date === dayStr).sort((a, b) => a.time.localeCompare(b.time));
@@ -663,7 +666,6 @@ function CalendarView() {
 
   return (
     <div className="space-y-4">
-      {/* HEADER CONTROL & TABS */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm">
         <div className="flex items-center space-x-2">
           <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl border dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center">
@@ -676,7 +678,6 @@ function CalendarView() {
           </button>
         </div>
 
-        {/* VIEW FILTER TABS */}
         <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
           {[
             { id: 'day', label: 'รายวัน' },
@@ -694,12 +695,10 @@ function CalendarView() {
         </div>
       </div>
 
-      {/* RENDER CALENDAR BODY */}
       {viewMode === 'month' && renderMonthView()}
       {viewMode === 'week' && renderWeekView()}
       {viewMode === 'day' && renderDayView()}
 
-      {/* POPUP DETAIL MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className={`p-6 rounded-2xl shadow-xl max-w-md w-full border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
@@ -780,7 +779,6 @@ function ContentPlanView() {
 
   return (
     <div className="space-y-4">
-      {/* FILTER HEADER */}
       <div className="flex flex-col md:flex-row gap-3 justify-between items-stretch md:items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm">
         <div className="flex-1 flex flex-col sm:flex-row gap-2">
           <input
@@ -803,7 +801,6 @@ function ContentPlanView() {
         </button>
       </div>
 
-      {/* CARDS LIST GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredContents.map(c => (
           <div key={c.id} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
@@ -845,7 +842,6 @@ function ContentPlanView() {
         ))}
       </div>
 
-      {/* FORM MODAL */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <form onSubmit={handleSave} className={`p-6 rounded-2xl shadow-xl max-w-md w-full border space-y-4 max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
@@ -924,7 +920,7 @@ function ContentPlanView() {
   );
 }
 
-// --- VIEW: PUBLISHED (READ-ONLY DRIVEN BY STATUS) ---
+// --- VIEW: PUBLISHED ---
 function PublishedView() {
   const { db } = useContext(AppContext);
   const publishedList = db.contents.filter(c => c.status === 'เผยแพร่แล้ว');
@@ -932,13 +928,13 @@ function PublishedView() {
   return (
     <div className="space-y-4">
       <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 rounded-2xl text-xs font-medium border border-emerald-100 dark:border-emerald-900">
+        💡 หน้ารวมผลงานที่เผยแพร่แล้วโดยอัตโนมัติ (ระบบดึงข้อมูลมาจาก Content Plan ที่เซ็ตสถานะเป็น "เผยแพร่แล้ว") คุณไม่สามารถเพิ่มข้อมูลตรงจากหน้านี้ได้
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {publishedList.map(item => (
           <div key={item.id} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden flex flex-col justify-between">
             <div>
-              {/* VIDEO PLACEHOLDER THUMBNAIL */}
               <div className="aspect-video bg-slate-100 dark:bg-slate-700 flex flex-col items-center justify-center p-4 text-center border-b dark:border-slate-600 relative">
                 <span className="absolute top-2 left-2 text-[10px] font-black tracking-wide px-2 py-0.5 rounded bg-black/60 text-white uppercase">{item.platform}</span>
                 <span className="text-xs font-bold opacity-40">🎬 Video Content Thumbnail</span>
@@ -1074,12 +1070,17 @@ function ChannelView() {
   );
 }
 
-// --- VIEW: PRODUCT STOCK ---
+// --- NEW VIEW: PRODUCT STOCK (WITH INTEGRATED CUSTOM CATEGORIES MANAGEMENT) ---
 function ProductStockView() {
   const { db, setDb, showDialog, darkMode } = useContext(AppContext);
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [formData, setFormData] = useState({ id: '', name: '', source: 'ซื้อเอง', price: '', dateReceived: '', note: '' });
+  
+  const [formData, setFormData] = useState({ id: '', name: '', source: 'ซื้อเอง', price: '', dateReceived: '', note: '', category: 'ไม่มีหมวดหมู่' });
+  const [selectedFilterCategory, setSelectedFilterCategory] = useState('ทั้งหมด');
+
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -1093,35 +1094,143 @@ function ProductStockView() {
     setModalOpen(false);
   };
 
+  const handleAddCategory = (e) => {
+    e.preventDefault();
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+    if (db.productCategories.includes(trimmed)) {
+      showDialog('alert', 'ระบบแจ้งเตือน', 'มีชื่อหมวดหมู่นี้ในระบบคลังของคุณแล้วค่ะ');
+      return;
+    }
+    setDb({
+      ...db,
+      productCategories: [...db.productCategories, trimmed]
+    });
+    setNewCategoryName('');
+  };
+
+  const handleDeleteCategory = (catName) => {
+    showDialog('confirm', 'ยืนยันลบหมวดหมู่', `คุณต้องการลบหมวดหมู่ "${catName}" ใช่หรือไม่? (สินค้าเดิมในกลุ่มนี้ทั้งหมดจะถูกปรับให้เป็น "ไม่มีหมวดหมู่" อัตโนมัติ)`, () => {
+      const updatedProducts = db.products.map(p => p.category === catName ? { ...p, category: 'ไม่มีหมวดหมู่' } : p);
+      const updatedCats = db.productCategories.filter(c => c !== catName);
+      setDb({
+        ...db,
+        products: updatedProducts,
+        productCategories: updatedCats
+      });
+      if (selectedFilterCategory === catName) {
+        setSelectedFilterCategory('ทั้งหมด');
+      }
+    });
+  };
+
+  const filteredProducts = db.products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = selectedFilterCategory === 'ทั้งหมด' || p.category === selectedFilterCategory;
+    return matchesSearch && matchesCategory;
+  });
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm">
-        <input
-          type="text"
-          placeholder="ค้นหาสินค้าที่ได้รับ..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="px-4 py-2 text-sm rounded-xl border dark:border-slate-700 bg-transparent outline-none max-w-xs w-full"
-        />
-        <button onClick={() => { setFormData({ id: '', name: '', source: 'ซื้อเอง', price: '', dateReceived: '', note: '' }); setModalOpen(true); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center space-x-2 shrink-0">
-          <PlusIcon /> <span className="hidden sm:inline">เพิ่มสินค้า</span>
-        </button>
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+          <input
+            type="text"
+            placeholder="ค้นหาชื่อของรีวิว..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="px-4 py-2 text-sm rounded-xl border dark:border-slate-700 bg-transparent outline-none max-w-xs w-full focus:ring-2 focus:ring-blue-500"
+          />
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button 
+              onClick={() => setManageCategoriesOpen(!manageCategoriesOpen)}
+              className="px-3.5 py-2 text-xs font-bold rounded-xl border border-dashed dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 hover:bg-slate-100 text-slate-600 dark:text-slate-300 transition-colors flex items-center space-x-1"
+            >
+              <span>📁 {manageCategoriesOpen ? 'ปิดโหมดจัดการหมวดหมู่' : 'จัดการหมวดหมู่สินค้า'}</span>
+            </button>
+            <button 
+              onClick={() => { 
+                setFormData({ id: '', name: '', source: 'ซื้อเอง', price: '', dateReceived: '', note: '', category: db.productCategories[0] || 'ไม่มีหมวดหมู่' }); 
+                setModalOpen(true); 
+              }} 
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center space-x-2 shrink-0 ml-auto"
+            >
+              <PlusIcon /> <span>เพิ่มของรีวิว</span>
+            </button>
+          </div>
+        </div>
+
+        {manageCategoriesOpen && (
+          <div className="p-4 border border-dashed rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 animate-fadeIn space-y-3">
+            <h4 className="text-xs font-bold opacity-75">🛠️ สร้างและแก้ไขหมวดหมู่สินค้าสต๊อกส่วนตัวของคุณ:</h4>
+            <form onSubmit={handleAddCategory} className="flex gap-2 max-w-md">
+              <input 
+                type="text" 
+                placeholder="พิมพ์ชื่อหมวดหมู่ใหม่ เช่น อุปกรณ์จัดโต๊ะคอม" 
+                value={newCategoryName} 
+                onChange={e => setNewCategoryName(e.target.value)} 
+                className="flex-1 px-3 py-1.5 border dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center">
+                <span>เพิ่มหมวดหมู่</span>
+              </button>
+            </form>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {db.productCategories.map((cat, idx) => (
+                <div key={idx} className="flex items-center text-xs bg-white dark:bg-slate-800 border dark:border-slate-700 px-2.5 py-1 rounded-lg">
+                  <span className="font-medium mr-1.5">{cat}</span>
+                  <button type="button" onClick={() => handleDeleteCategory(cat)} className="text-red-500 font-bold hover:text-red-700 text-xs">×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-1.5 border-t dark:border-slate-700 pt-3">
+          <button
+            onClick={() => setSelectedFilterCategory('ทั้งหมด')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              selectedFilterCategory === 'ทั้งหมด' 
+                ? 'bg-blue-600 text-white shadow-sm' 
+                : 'bg-slate-100 dark:bg-slate-900 text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            📦 ทั้งหมด ({db.products.length})
+          </button>
+          {db.productCategories.map((cat, idx) => {
+            const count = db.products.filter(p => p.category === cat).length;
+            return (
+              <button
+                key={idx}
+                onClick={() => setSelectedFilterCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  selectedFilterCategory === cat 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'bg-slate-100 dark:bg-slate-900 text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {cat} ({count})
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {db.products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => (
-          <div key={p.id} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border dark:border-slate-700 shadow-sm flex flex-col justify-between">
+        {filteredProducts.map(p => (
+          <div key={p.id} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded ${p.source === 'Sponsor' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>{p.source}</span>
-                <span className="text-xs font-bold text-slate-400">{p.dateReceived || '-'}</span>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded ${p.source === 'Sponsor' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'}`}>{p.source}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-bold opacity-80">{p.category || 'ไม่มีหมวดหมู่'}</span>
               </div>
               <h4 className="font-bold text-sm mb-1">{p.name}</h4>
-              <p className="text-xs font-medium text-slate-500 mb-3">💰 มูลค่า/ราคา: {p.price ? `${p.price} บาท` : 'ไม่ระบุราคา'}</p>
+              <p className="text-xs font-medium text-slate-500 mb-3">💰 ราคา: {p.price ? `${p.price} บาท` : 'ไม่ระบุราคา'}</p>
               <p className="text-xs opacity-70 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-dashed dark:border-slate-700">{p.note || 'ไม่มีหมายเหตุ'}</p>
             </div>
 
-            <div className="flex justify-end space-x-1 pt-3 mt-4 border-t dark:border-slate-700">
+            <div className="flex justify-end space-x-2 pt-3 mt-4 border-t dark:border-slate-700">
+              <span className="text-[10px] opacity-60 mr-auto flex items-center">📅 รับ: {p.dateReceived || '-'}</span>
               <button onClick={() => { setFormData(p); setModalOpen(true); }} className="p-1.5 border dark:border-slate-700 rounded-lg text-slate-400 flex items-center justify-center">
                 <EditIcon />
               </button>
@@ -1131,37 +1240,51 @@ function ProductStockView() {
             </div>
           </div>
         ))}
+        {filteredProducts.length === 0 && (
+          <div className="col-span-full text-center py-12 text-slate-400 text-sm">ไม่มีของรีวิวในกลุ่มประเภทนี้ค่ะ</div>
+        )}
       </div>
 
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <form onSubmit={handleSave} className={`p-6 rounded-2xl shadow-xl max-w-md w-full border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <h3 className="font-bold text-base border-b pb-2 dark:border-slate-700">{formData.id ? 'แก้ไขสินค้า' : 'เพิ่มของรีวิวใหม่'}</h3>
+            <h3 className="font-bold text-base border-b pb-2 dark:border-slate-700">{formData.id ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มของรีวิวใหม่'}</h3>
             <div className="space-y-3 text-sm">
               <div>
                 <label className="block text-xs font-bold mb-1">ชื่อสินค้า *</label>
-                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none" required />
+                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" required />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <label className="block text-xs font-bold mb-1">หมวดหมู่สินค้า</label>
+                  <select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="ไม่มีหมวดหมู่">ไม่มีหมวดหมู่</option>
+                    {db.productCategories.map((cat, idx) => (
+                      <option key={idx} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-bold mb-1">ที่มาสินค้า</label>
-                  <select value={formData.source} onChange={e => setFormData({ ...formData, source: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 outline-none">
+                  <select value={formData.source} onChange={e => setFormData({ ...formData, source: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="ซื้อเอง">ซื้อเอง</option>
                     <option value="Sponsor">Sponsor</option>
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold mb-1">ราคา (บาท)</label>
-                  <input type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none" />
+                  <input type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1">วันที่ได้รับสินค้า</label>
+                  <input type="date" value={formData.dateReceived} onChange={e => setFormData({ ...formData, dateReceived: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1">วันที่ได้รับสินค้า</label>
-                <input type="date" value={formData.dateReceived} onChange={e => setFormData({ ...formData, dateReceived: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none" />
-              </div>
-              <div>
                 <label className="block text-xs font-bold mb-1">หมายเหตุเพิ่มเติม</label>
-                <textarea value={formData.note} onChange={e => setFormData({ ...formData, note: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none h-16" />
+                <textarea value={formData.note} onChange={e => setFormData({ ...formData, note: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none h-16 focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
             <div className="flex justify-end space-x-2 pt-2">
@@ -1175,7 +1298,7 @@ function ProductStockView() {
   );
 }
 
-// --- VIEW: JOURNAL & IDEAS ---
+// --- VIEW: JOURNAL ---
 function JournalView() {
   const { db, setDb, showDialog, darkMode } = useContext(AppContext);
   const [modalOpen, setModalOpen] = useState(false);
