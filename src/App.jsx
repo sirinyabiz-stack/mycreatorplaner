@@ -1075,17 +1075,18 @@ function ProductStockView() {
   const { db, setDb, showDialog, darkMode } = useContext(AppContext);
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState('');
-  
-  const [formData, setFormData] = useState({ id: '', name: '', source: 'ซื้อเอง', price: '', dateReceived: '', note: '', category: 'ไม่มีหมวดหมู่' });
-  const [selectedFilterCategory, setSelectedFilterCategory] = useState('ทั้งหมด');
-
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [editIdx, setEditIdx] = useState(null);
+  const [selectedFilterCategory, setSelectedFilterCategory] = useState('ทั้งหมด');
 
+  const [formData, setFormData] = useState({ 
+    id: '', name: '', note: '', price: '', source: 'ซื้อเอง', category: 'ไม่มีหมวดหมู่', dateReceived: '' 
+  });
+
+  // ฟังก์ชันบันทึกสินค้า
   const handleSave = (e) => {
     e.preventDefault();
-    if (!formData.name) return;
-
     if (formData.id) {
       setDb({ ...db, products: db.products.map(p => p.id === formData.id ? formData : p) });
     } else {
@@ -1094,202 +1095,113 @@ function ProductStockView() {
     setModalOpen(false);
   };
 
-  const handleAddCategory = (e) => {
+  // ฟังก์ชันจัดการหมวดหมู่
+  const handleSaveCategory = (e) => {
     e.preventDefault();
-    const trimmed = newCategoryName.trim();
-    if (!trimmed) return;
-    if (db.productCategories.includes(trimmed)) {
-      showDialog('alert', 'ระบบแจ้งเตือน', 'มีชื่อหมวดหมู่นี้ในระบบคลังของคุณแล้วค่ะ');
-      return;
+    if (!newCategoryName.trim()) return;
+    if (editIdx !== null) {
+      const oldName = db.productCategories[editIdx];
+      const updatedCats = [...db.productCategories];
+      updatedCats[editIdx] = newCategoryName.trim();
+      const updatedProducts = db.products.map(p => p.category === oldName ? { ...p, category: newCategoryName.trim() } : p);
+      setDb({ ...db, productCategories: updatedCats, products: updatedProducts });
+      setEditIdx(null);
+    } else {
+      if (!db.productCategories.includes(newCategoryName.trim())) {
+        setDb({ ...db, productCategories: [...db.productCategories, newCategoryName.trim()] });
+      }
     }
-    setDb({
-      ...db,
-      productCategories: [...db.productCategories, trimmed]
-    });
     setNewCategoryName('');
   };
 
-  const handleDeleteCategory = (catName) => {
-    showDialog('confirm', 'ยืนยันลบหมวดหมู่', `คุณต้องการลบหมวดหมู่ "${catName}" ใช่หรือไม่? (สินค้าเดิมในกลุ่มนี้ทั้งหมดจะถูกปรับให้เป็น "ไม่มีหมวดหมู่" อัตโนมัติ)`, () => {
-      const updatedProducts = db.products.map(p => p.category === catName ? { ...p, category: 'ไม่มีหมวดหมู่' } : p);
-      const updatedCats = db.productCategories.filter(c => c !== catName);
-      setDb({
-        ...db,
-        products: updatedProducts,
-        productCategories: updatedCats
-      });
-      if (selectedFilterCategory === catName) {
-        setSelectedFilterCategory('ทั้งหมด');
-      }
-    });
-  };
-
-  const filteredProducts = db.products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedFilterCategory === 'ทั้งหมด' || p.category === selectedFilterCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredProducts = db.products.filter(p => 
+    (selectedFilterCategory === 'ทั้งหมด' || p.category === selectedFilterCategory) &&
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-4">
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-          <input
-            type="text"
-            placeholder="ค้นหาชื่อของรีวิว..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="px-4 py-2 text-sm rounded-xl border dark:border-slate-700 bg-transparent outline-none max-w-xs w-full focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="flex gap-2 w-full sm:w-auto">
-            <button 
-              onClick={() => setManageCategoriesOpen(!manageCategoriesOpen)}
-              className="px-3.5 py-2 text-xs font-bold rounded-xl border border-dashed dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 hover:bg-slate-100 text-slate-600 dark:text-slate-300 transition-colors flex items-center space-x-1"
-            >
-              <span>📁 {manageCategoriesOpen ? 'ปิดโหมดจัดการหมวดหมู่' : 'จัดการหมวดหมู่สินค้า'}</span>
-            </button>
-            <button 
-              onClick={() => { 
-                setFormData({ id: '', name: '', source: 'ซื้อเอง', price: '', dateReceived: '', note: '', category: db.productCategories[0] || 'ไม่มีหมวดหมู่' }); 
-                setModalOpen(true); 
-              }} 
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center space-x-2 shrink-0 ml-auto"
-            >
-              <PlusIcon /> <span>เพิ่มของรีวิว</span>
-            </button>
-          </div>
-        </div>
-
-        {manageCategoriesOpen && (
-          <div className="p-4 border border-dashed rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 animate-fadeIn space-y-3">
-            <h4 className="text-xs font-bold opacity-75">🛠️ สร้างและแก้ไขหมวดหมู่สินค้าสต๊อกส่วนตัวของคุณ:</h4>
-            <form onSubmit={handleAddCategory} className="flex gap-2 max-w-md">
-              <input 
-                type="text" 
-                placeholder="พิมพ์ชื่อหมวดหมู่ใหม่ เช่น อุปกรณ์จัดโต๊ะคอม" 
-                value={newCategoryName} 
-                onChange={e => setNewCategoryName(e.target.value)} 
-                className="flex-1 px-3 py-1.5 border dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center">
-                <span>เพิ่มหมวดหมู่</span>
-              </button>
-            </form>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {db.productCategories.map((cat, idx) => (
-                <div key={idx} className="flex items-center text-xs bg-white dark:bg-slate-800 border dark:border-slate-700 px-2.5 py-1 rounded-lg">
-                  <span className="font-medium mr-1.5">{cat}</span>
-                  <button type="button" onClick={() => handleDeleteCategory(cat)} className="text-red-500 font-bold hover:text-red-700 text-xs">×</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-1.5 border-t dark:border-slate-700 pt-3">
-          <button
-            onClick={() => setSelectedFilterCategory('ทั้งหมด')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              selectedFilterCategory === 'ทั้งหมด' 
-                ? 'bg-blue-600 text-white shadow-sm' 
-                : 'bg-slate-100 dark:bg-slate-900 text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            📦 ทั้งหมด ({db.products.length})
-          </button>
-          {db.productCategories.map((cat, idx) => {
-            const count = db.products.filter(p => p.category === cat).length;
-            return (
-              <button
-                key={idx}
-                onClick={() => setSelectedFilterCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  selectedFilterCategory === cat 
-                    ? 'bg-blue-600 text-white shadow-sm' 
-                    : 'bg-slate-100 dark:bg-slate-900 text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {cat} ({count})
-              </button>
-            );
-          })}
-        </div>
+      {/* ส่วนบน: ค้นหาและปุ่ม */}
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm flex flex-wrap gap-2">
+        <input className="flex-1 p-2 border rounded-xl dark:bg-slate-900" placeholder="ค้นหา..." onChange={(e) => setSearch(e.target.value)} />
+        <button onClick={() => setManageCategoriesOpen(!manageCategoriesOpen)} className="p-2 border rounded-xl">📁 หมวดหมู่</button>
+        <button onClick={() => { setFormData({ id: '', name: '', note: '', price: '', source: 'ซื้อเอง', category: 'ไม่มีหมวดหมู่', dateReceived: '' }); setModalOpen(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold">+ เพิ่มสินค้า</button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredProducts.map(p => (
-          <div key={p.id} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded ${p.source === 'Sponsor' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'}`}>{p.source}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-bold opacity-80">{p.category || 'ไม่มีหมวดหมู่'}</span>
-              </div>
-              <h4 className="font-bold text-sm mb-1">{p.name}</h4>
-              <p className="text-xs font-medium text-slate-500 mb-3">💰 ราคา: {p.price ? `${p.price} บาท` : 'ไม่ระบุราคา'}</p>
-              <p className="text-xs opacity-70 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-dashed dark:border-slate-700">{p.note || 'ไม่มีหมายเหตุ'}</p>
-            </div>
+      {/* ส่วนจัดการหมวดหมู่ */}
+      {manageCategoriesOpen && (
+        <div className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-900">
+           <form onSubmit={handleSaveCategory} className="flex gap-2 mb-4">
+             <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} className="flex-1 p-2 border rounded-lg" placeholder="ชื่อหมวดหมู่..." />
+             <button type="submit" className="bg-emerald-600 text-white px-4 py-2 rounded-lg">{editIdx !== null ? 'บันทึก' : 'เพิ่ม'}</button>
+           </form>
+           <div className="flex flex-wrap gap-2">
+             {db.productCategories.map((cat, idx) => (
+               <div key={idx} className="px-3 py-1 bg-white border rounded-full flex items-center gap-2 text-sm">
+                 <span className="cursor-pointer" onClick={() => {setNewCategoryName(cat); setEditIdx(idx)}}>{cat}</span>
+                 <button onClick={() => setDb({...db, productCategories: db.productCategories.filter((_,i)=>i!==idx)})} className="text-red-500 font-bold">×</button>
+               </div>
+             ))}
+           </div>
+        </div>
+      )}
 
-            <div className="flex justify-end space-x-2 pt-3 mt-4 border-t dark:border-slate-700">
-              <span className="text-[10px] opacity-60 mr-auto flex items-center">📅 รับ: {p.dateReceived || '-'}</span>
-              <button onClick={() => { setFormData(p); setModalOpen(true); }} className="p-1.5 border dark:border-slate-700 rounded-lg text-slate-400 flex items-center justify-center">
-                <EditIcon />
-              </button>
-              <button onClick={() => showDialog('confirm', 'ลบสินค้า', 'ต้องการลบสินค้าชิ้นนี้?', () => setDb({ ...db, products: db.products.filter(item => item.id !== p.id) }))} className="p-1.5 border dark:border-slate-700 rounded-lg text-red-400 flex items-center justify-center">
-                <TrashIcon />
-              </button>
+      {/* รายการสินค้า */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {filteredProducts.map(p => (
+          <div key={p.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl border shadow-sm">
+            <h4 className="font-bold">{p.name}</h4>
+            <p className="text-sm text-slate-500">ประเภท: {p.source} | หมวดหมู่: {p.category}</p>
+            <p className="text-sm">ราคา: {p.price} บาท</p>
+            <div className="flex justify-end gap-2 mt-2">
+              <button onClick={() => { setFormData(p); setModalOpen(true); }} className="text-blue-500">แก้ไข</button>
             </div>
           </div>
         ))}
-        {filteredProducts.length === 0 && (
-          <div className="col-span-full text-center py-12 text-slate-400 text-sm">ไม่มีของรีวิวในกลุ่มประเภทนี้ค่ะ</div>
-        )}
       </div>
 
+      {/* MODAL เพิ่ม/แก้ไขสินค้า (ตัวใหม่ที่มีครบทุกช่อง) */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <form onSubmit={handleSave} className={`p-6 rounded-2xl shadow-xl max-w-md w-full border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <h3 className="font-bold text-base border-b pb-2 dark:border-slate-700">{formData.id ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มของรีวิวใหม่'}</h3>
-            <div className="space-y-3 text-sm">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="p-6 bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg space-y-3">
+            <h3 className="font-bold text-lg">{formData.id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า'}</h3>
+            <label className="text-xs font-bold">ชื่อสินค้า</label>
+            <input className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} required />
+            
+            <label className="text-xs font-bold">รายละเอียด</label>
+            <textarea className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} />
+            
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-bold mb-1">ชื่อสินค้า *</label>
-                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" required />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">หมวดหมู่สินค้า</label>
-                  <select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="ไม่มีหมวดหมู่">ไม่มีหมวดหมู่</option>
-                    {db.productCategories.map((cat, idx) => (
-                      <option key={idx} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1">ที่มาสินค้า</label>
-                  <select value={formData.source} onChange={e => setFormData({ ...formData, source: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="ซื้อเอง">ซื้อเอง</option>
-                    <option value="Sponsor">Sponsor</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">ราคา (บาท)</label>
-                  <input type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1">วันที่ได้รับสินค้า</label>
-                  <input type="date" value={formData.dateReceived} onChange={e => setFormData({ ...formData, dateReceived: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
+                <label className="text-xs font-bold">ราคา (บาท)</label>
+                <input type="number" className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.price} onChange={e=>setFormData({...formData, price: e.target.value})} />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1">หมายเหตุเพิ่มเติม</label>
-                <textarea value={formData.note} onChange={e => setFormData({ ...formData, note: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none h-16 focus:ring-2 focus:ring-blue-500" />
+                <label className="text-xs font-bold">ประเภท</label>
+                <select className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.source} onChange={e=>setFormData({...formData, source: e.target.value})}>
+                  <option>ซื้อเอง</option>
+                  <option>สินค้าจากสปอนเซอร์</option>
+                </select>
               </div>
             </div>
-            <div className="flex justify-end space-x-2 pt-2">
-              <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 border dark:border-slate-600 rounded-xl">ยกเลิก</button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold">บันทึกสินค้า</button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-bold">หมวดหมู่</label>
+                <select className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}>
+                  <option value="ไม่มีหมวดหมู่">ไม่มีหมวดหมู่</option>
+                  {db.productCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold">วันที่</label>
+                <input type="date" className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.dateReceived} onChange={e=>setFormData({...formData, dateReceived: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 border rounded-xl">ยกเลิก</button>
+              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-xl">บันทึก</button>
             </div>
           </form>
         </div>
