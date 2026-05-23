@@ -215,6 +215,10 @@ const initialMockData = {
     { id: '2', name: 'โคมไฟมินิมอล', source: 'Sponsor', price: '0', dateReceived: '2026-05-12', note: 'สปอนเซอร์ส่งมาให้ช่วยทำคลิป', category: 'ตกแต่งบ้าน' }
   ],
   productCategories: ['ไอที & แกดเจ็ต', 'ตกแต่งห้อง', 'เครื่องเขียน', 'เสื้อผ้า / แฟชั่น'],
+  
+  // 🟢 เพิ่มข้อมูลรายชื่อ Platforms ทั้งหมดตรงนี้
+  platforms: ['YouTube', 'TikTok', 'Facebook', 'Shopee', 'Instagram', 'Lemon8', 'Other'],
+  
   journals: [
     { id: '1', title: 'ไอเดียช่อง พยายามจะเก่งขึ้นวันละนิด', content: 'ทำคลิปแชร์ทริคพัฒนาตัวเองวันละ 1 ข้อ สั้นๆ เข้าใจง่าย เล่าเรื่องแบบ Planner', date: '2026-05-19', tag: '#Mindset', pinned: true }
   ],
@@ -238,6 +242,10 @@ export default function App() {
       const parsed = JSON.parse(saved);
       if (!parsed.productCategories) {
         parsed.productCategories = initialMockData.productCategories;
+      }
+      // 🟢 ตรวจสอบและเพิ่ม platforms หากข้อมูลเดิมในเครื่องไม่มี
+      if (!parsed.platforms) {
+        parsed.platforms = initialMockData.platforms;
       }
       return parsed;
     }
@@ -1038,7 +1046,7 @@ function ChannelView() {
                 <div>
                   <label className="block text-xs font-bold mb-1">แพลตฟอร์ม</label>
                   <select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 outline-none">
-                    {['TikTok', 'YouTube', 'Facebook', 'Other'].map(p => <option key={p} value={p}>{p}</option>)}
+                    {['TikTok', 'YouTube', 'Facebook','Shopee','Instagram','Lemon8', 'Other'].map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1046,10 +1054,7 @@ function ChannelView() {
                   <input type="text" value={formData.followers} onChange={e => setFormData({ ...formData, followers: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none" placeholder="เช่น 15K" />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold mb-1">หมวดหมู่ช่อง</label>
-                <input type="text" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none" placeholder="เช่น รีวิวของใช้, ไอที" />
-              </div>
+ 
               <div>
                 <label className="block text-xs font-bold mb-1">ลิงก์ช่อง</label>
                 <input type="url" value={formData.link} onChange={e => setFormData({ ...formData, link: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none" placeholder="https://..." />
