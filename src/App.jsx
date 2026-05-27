@@ -500,256 +500,620 @@ function DashboardView() {
     </div>
   );
 }
-
-// --- VIEW: CALENDAR ---
+// --- VIEW: CALENDAR (เวอร์ชัน 3 มุมมอง: แก้บั๊กปุ่มเดือนถัดไปหาย + ดูรายละเอียดชิ้นเดียวกดแก้ไข/ลบในตัว) ---
 function CalendarView() {
-  const { db, darkMode } = useContext(AppContext);
+  const { db, setDb, showDialog, darkMode, setActiveTab, setSelectedDateForPlan } = useContext(AppContext);
+  
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('month');
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'week' | 'day'
+  
+  // States สำหรับควบคุม Modal รายการประจำวัน (เมื่อกดกล่องวันที่ใน Month View)
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDateStr, setSelectedDateStr] = useState('');
 
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const totalDays = new Date(year, month + 1, 0).getDate();
-    return { firstDay, totalDays, year, month };
+  // 🎯 States ใหม่: สำหรับดึงข้อมูลคอนเทนต์เดี่ยว ๆ ขึ้นมาแสดง (Specific ContentView)
+  const [activeSingleContent, setActiveSingleContent] = useState(null);
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({ id: '', title: '', description: '', date: '', time: '12:00', status: 'ร่าง', platform: 'TikTok', tag: '', product: 'ไม่มี', link: '' });
+
+  // ฟังก์ชันช่วยจัดฟอร์แมตวันที่ให้ปลอดภัย (YYYY-MM-DD)
+  const formatDateString = (dateObj) => {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   };
 
-  const { firstDay, totalDays, year, month } = getDaysInMonth(currentDate);
+  const todayStr = formatDateString(new Date());
+
+  // 🛠️ แก้บั๊ก: คำนวณข้อมูลเดือนจาก currentDate โดยตรงเสมอ เพื่อให้กดเลื่อนเดือนแล้วเงื่อนไขไม่เพี้ยน
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  const firstDayIdx = new Date(currentYear, currentMonth, 1).getDay();
+  const totalDaysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 
   const monthNames = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
   ];
 
-  const changeMonth = (direction) => {
+  const dayNamesShort = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+
+  // การเลื่อนตารางเวลา
+  const handleNavigate = (direction) => {
     const newDate = new Date(currentDate);
     if (viewMode === 'month') {
       newDate.setMonth(currentDate.getMonth() + direction);
     } else if (viewMode === 'week') {
-      newDate.setDate(currentDate.getDate() + direction * 7);
-    } else {
+      newDate.setDate(currentDate.getDate() + (direction * 7));
+    } else if (viewMode === 'day') {
       newDate.setDate(currentDate.getDate() + direction);
     }
     setCurrentDate(newDate);
   };
 
-  const handleCellClick = (dayStr) => {
-    const matched = db.contents.filter(c => c.date === dayStr);
-    setSelectedDayEvents(matched);
+  const getDaysOfCurrentWeek = (date) => {
+    const currentDayOfWeek = date.getDay();
+    const startOfWeek = new Date(date);
+    startOfWeek.setDate(date.getDate() - currentDayOfWeek);
+
+    const weekDays = [];
+    for (let i = 0; i < 7; i++) {
+      const tempDay = new Date(startOfWeek);
+      tempDay.setDate(startOfWeek.getDate() + i);
+      weekDays.push(tempDay);
+    }
+    return weekDays;
+  };
+
+  // 🎯 ดึงงานชิ้นเดียวขึ้นมาโชว์เดี่ยว ๆ บนหน้าจอ (Specific View) ทันทีตามคอนเซปต์
+  const handleOpenSpecificContent = (contentItem) => {
+    setActiveSingleContent(contentItem);
+    setIsModalOpen(false); // ปิดป๊อปอัปรายวันตัวเก่า
+  };
+
+  // ดำเนินการเปิดฟอร์มแก้ไขข้อมูลงาน
+  const handleOpenEditForm = () => {
+    setEditFormData({ ...activeSingleContent });
+    setIsEditFormOpen(true);
+  };
+
+  // บันทึกการแก้ไขข้อมูลคอนเทนต์
+  const handleSaveEdit = (e) => {
+    e.preventDefault();
+    if (!editFormData.title || !editFormData.date) {
+      if (showDialog) showDialog('alert', 'ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน');
+      return;
+    }
+    const updatedContents = db.contents.map(item => item.id === editFormData.id ? editFormData : item);
+    const updatedDb = { ...db, contents: updatedContents };
+    setDb(updatedDb);
+    localStorage.setItem('kapom_crm_db', JSON.stringify(updatedDb));
+    
+    setActiveSingleContent(editFormData); // อัปเดตหน้าแสดงผลเดี่ยว
+    setIsEditFormOpen(false);
+    if (showDialog) showDialog('success', 'บันทึกสำเร็จ', 'แก้ไขข้อมูลคอนเทนต์เรียบร้อยแล้วค่ะ');
+  };
+
+  // ลบคอนเทนต์ชิ้นนั้นทิ้งทันที
+  const handleDeleteContent = (id) => {
+    const executeDelete = () => {
+      const updatedContents = db.contents.filter(item => item.id !== id);
+      const updatedDb = { ...db, contents: updatedContents };
+      setDb(updatedDb);
+      localStorage.setItem('kapom_crm_db', JSON.stringify(updatedDb));
+      setActiveSingleContent(null); // ปิดหน้ารายละเอียดเดี่ยว
+      if (showDialog) showDialog('success', 'ลบสำเร็จ', 'ลบคอนเทนต์ออกจากระบบเรียบร้อยแล้ว');
+    };
+
+    if (showDialog) {
+      showDialog('confirm', 'ยืนยันการลบ', 'คุณต้องการลบคอนเทนต์ชิ้นนี้ใช่หรือไม่? เมื่อลบแล้วจะไม่สามารถกู้คืนได้', executeDelete);
+    } else if (window.confirm('คุณต้องการลบคอนเทนต์ชิ้นนี้ใช่หรือไม่?')) {
+      executeDelete();
+    }
+  };
+
+  // จัดการการส่งค่าไปหน้าฟอร์มสร้างใหม่ปกติ (กรณีผู้ใช้กดปุ่ม + บนวันที่อนาคต)
+  const handleCreateNewPlan = (dateStr) => {
+    if (dateStr < todayStr) return; 
+    if (setSelectedDateForPlan) {
+      setSelectedDateForPlan(dateStr);
+    }
+    setActiveTab('content');
+    setIsModalOpen(false);
+  };
+
+  const handleDayBoxClick = (dateStr, dayEvents) => {
+    setSelectedDateStr(dateStr);
+    setSelectedDayEvents(dayEvents || []);
     setIsModalOpen(true);
   };
 
-  const getStatusColorClass = (status) => {
-    switch (status) {
-      case 'ร่าง': return 'bg-slate-400';
-      case 'ตัดต่อ': return 'bg-blue-600';
-      case 'พร้อมลง': return 'bg-orange-500';
-      case 'เผยแพร่แล้ว': return 'bg-emerald-600';
-      default: return 'bg-slate-400';
+  // ==========================================
+  // RENDER LAYOUT: MONTH VIEW
+  // ==========================================
+  const renderMonthGrid = () => {
+    const days = [];
+    for (let i = 0; i < firstDayIdx; i++) {
+      days.push(<div key={`empty-${i}`} className="p-2 border-b border-r dark:border-slate-800 bg-slate-50/10 dark:bg-slate-900/5"></div>);
     }
-  };
 
-  const renderMonthView = () => {
-    const blanks = Array(firstDay).fill(null);
-    const dayCells = Array.from({ length: totalDays }, (_, i) => i + 1);
-    const gridItems = [...blanks, ...dayCells];
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const dStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayEvents = db.contents ? db.contents.filter(item => item.date === dStr) : [];
+      const isToday = todayStr === dStr;
 
-    return (
-      <div className="grid grid-cols-7 gap-1 md:gap-2">
-        {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (
-          <div key={i} className="text-center font-bold text-xs py-2 uppercase opacity-60">{d}</div>
-        ))}
-        {gridItems.map((day, idx) => {
-          if (day === null) return <div key={idx} className="aspect-square bg-slate-100/30 dark:bg-slate-800/20 rounded-xl" />;
+      days.push(
+        <div 
+          key={day} 
+          onClick={() => handleDayBoxClick(dStr, dayEvents)}
+          className={`p-1.5 border-b border-r dark:border-slate-800 min-h-28 flex flex-col justify-between cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
+            isToday ? 'bg-blue-50/40 dark:bg-blue-950/10' : ''
+          }`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+              isToday ? 'bg-blue-600 text-white' : 'text-slate-700 dark:text-slate-300'
+            }`}>
+              {day}
+            </span>
+            {dayEvents.length > 0 && (
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{dayEvents.length} งาน</span>
+            )}
+          </div>
           
-          const dayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const dayEvents = db.contents.filter(c => c.date === dayStr);
-          const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
-
-          return (
-            <div
-              key={idx}
-              onClick={() => handleCellClick(dayStr)}
-              className={`aspect-square p-1.5 md:p-2 rounded-xl border flex flex-col justify-between cursor-pointer transition-all hover:border-blue-500 ${
-                isToday ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-950/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800'
-              }`}
-            >
-              <span className={`text-xs font-bold ${isToday ? 'text-blue-600 dark:text-blue-400' : 'opacity-70'}`}>{day}</span>
-              <div className="flex flex-wrap gap-1 mt-1 overflow-hidden max-h-12">
-                {dayEvents.map(ev => (
-                  <div key={ev.id} className={`w-2 h-2 rounded-full ${getStatusColorClass(ev.status)}`} title={ev.title} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderWeekView = () => {
-    const startOfWeek = new Date(currentDate);
-    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
-
-    return (
-      <div className="grid grid-cols-7 gap-2">
-        {Array.from({ length: 7 }).map((_, idx) => {
-          const targetDate = new Date(startOfWeek);
-          targetDate.setDate(startOfWeek.getDate() + idx);
-          
-          const dayStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-          const dayEvents = db.contents.filter(c => c.date === dayStr);
-          const isToday = new Date().toDateString() === targetDate.toDateString();
-
-          return (
-            <div
-              key={idx}
-              onClick={() => handleCellClick(dayStr)}
-              className={`min-h-[220px] p-3 rounded-xl border flex flex-col cursor-pointer transition-all hover:border-blue-500 ${
-                isToday ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-950/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800'
-              }`}
-            >
-              <div className="text-center pb-2 border-b border-slate-100 dark:border-slate-700">
-                <p className="text-xs opacity-60 font-medium">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'][idx]}</p>
-                <p className={`text-base font-black ${isToday ? 'text-blue-600 dark:text-blue-400' : ''}`}>{targetDate.getDate()}</p>
-              </div>
-              <div className="mt-2 space-y-1.5 flex-1 overflow-y-auto max-h-40">
-                {dayEvents.map(ev => (
-                  <div key={ev.id} className={`text-[10px] p-1 text-white rounded font-medium truncate ${getStatusColorClass(ev.status)}`}>
-                    {ev.time} {ev.title}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderDayView = () => {
-    const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-    const dayEvents = db.contents.filter(c => c.date === dayStr).sort((a, b) => a.time.localeCompare(b.time));
-
-    return (
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border dark:border-slate-700 p-6 shadow-sm">
-        <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wider mb-4">ตารางเวลาสำหรับวันนี้ ({dayStr})</h4>
-        {dayEvents.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-sm">วันนี้ไม่มีการจัดวางตารางงานคอนเทนต์</div>
-        ) : (
-          <div className="space-y-4 relative before:absolute before:inset-y-0 before:left-[45px] before:w-0.5 before:bg-slate-100 dark:before:bg-slate-700">
-            {dayEvents.map(ev => (
-              <div key={ev.id} className="flex items-start space-x-6 relative">
-                <div className="w-12 text-right pt-1 text-xs font-black text-slate-500">{ev.time}</div>
-                <div className={`w-3 h-3 rounded-full mt-2 relative z-10 ring-4 ${darkMode ? 'ring-slate-800' : 'ring-white'} ${getStatusColorClass(ev.status)}`} />
-                <div className="flex-1 p-4 rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs px-2 py-0.5 font-bold rounded-md bg-white dark:bg-slate-800 border shadow-sm">{ev.platform}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 text-white rounded ${getStatusColorClass(ev.status)}`}>{ev.status}</span>
-                  </div>
-                  <h5 className="font-bold text-sm mt-2">{ev.title}</h5>
-                  {ev.description && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{ev.description}</p>}
-                  {ev.product && ev.product !== 'ไม่มี' && <p className="text-[11px] font-medium text-blue-500 mt-2">🛍️ สินค้า: {ev.product}</p>}
-                </div>
+          <div className="space-y-1 flex-1 overflow-y-auto pr-0.5" onClick={(e) => e.stopPropagation()}>
+            {dayEvents.slice(0, 3).map(ev => (
+              <div 
+                key={ev.id} 
+                onClick={() => handleOpenSpecificContent(ev)}
+                className={`text-[9px] px-1.5 py-0.5 rounded truncate font-bold text-white shadow-sm hover:brightness-95 transition-all ${
+                  ev.status === 'เผยแพร่แล้ว' ? 'bg-emerald-600' : ev.status === 'พร้อมลง' ? 'bg-orange-500' : ev.status === 'ตัดต่อ' ? 'bg-blue-600' : 'bg-slate-400'
+                }`}
+              >
+                ⏰ {ev.time} | {ev.title}
               </div>
             ))}
+            {dayEvents.length > 3 && (
+              <div onClick={() => handleDayBoxClick(dStr, dayEvents)} className="text-[9px] text-center text-blue-500 dark:text-blue-400 font-bold hover:underline pt-0.5">
+                +{dayEvents.length - 3} เพิ่มเติม
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      );
+    }
+
+    const totalSlots = firstDayIdx + totalDaysInMonth;
+    const remainingSlots = totalSlots % 7 === 0 ? 0 : 7 - (totalSlots % 7);
+    for (let i = 0; i < remainingSlots; i++) {
+      days.push(<div key={`empty-end-${i}`} className="p-2 border-b border-r dark:border-slate-800 bg-slate-50/10 dark:bg-slate-900/5"></div>);
+    }
+
+    return days;
+  };
+
+  // ==========================================
+  // RENDER LAYOUT: WEEK VIEW
+  // ==========================================
+  const renderWeekView = () => {
+    const weekDays = getDaysOfCurrentWeek(currentDate);
+
+    return (
+      <div className="grid grid-cols-7 bg-white dark:bg-slate-800 rounded-2xl border dark:border-slate-700 shadow-sm overflow-hidden divide-x dark:divide-slate-700">
+        {weekDays.map((day, idx) => {
+          const dStr = formatDateString(day);
+          const dayEvents = db.contents ? db.contents.filter(item => item.date === dStr) : [];
+          const isToday = todayStr === dStr;
+          const isPastDate = dStr < todayStr;
+
+          return (
+            <div key={dStr} className={`p-3 min-h-[400px] flex flex-col justify-between ${isToday ? 'bg-blue-50/20 dark:bg-blue-950/5' : ''}`}>
+              <div className="border-b pb-2 dark:border-slate-700 text-center space-y-1">
+                <p className={`text-xs font-bold ${idx === 0 ? 'text-red-500' : idx === 6 ? 'text-blue-500' : 'text-slate-400'}`}>
+                  {dayNamesShort[idx]}
+                </p>
+                <p className={`text-sm font-black inline-block px-2 py-0.5 rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-slate-700 dark:text-slate-200'}`}>
+                  {day.getDate()}
+                </p>
+              </div>
+
+              <div className="flex-1 my-3 space-y-2 overflow-y-auto max-h-[300px] pr-0.5">
+                {dayEvents.length === 0 ? (
+                  <p className="text-[10px] text-slate-300 dark:text-slate-600 text-center italic pt-4">ไม่มีแผนงาน</p>
+                ) : (
+                  dayEvents.map(ev => (
+                    <div
+                      key={ev.id}
+                      onClick={() => handleOpenSpecificContent(ev)}
+                      className="p-2 border dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/40 cursor-pointer hover:border-blue-500 hover:shadow-xs transition-all text-left space-y-1 group"
+                    >
+                      <div className="flex justify-between items-center text-[9px] opacity-80">
+                        <span className="font-bold text-blue-600 dark:text-blue-400">{ev.time} น.</span>
+                        <span className="font-medium truncate max-w-[45px]">{ev.platform}</span>
+                      </div>
+                      <h6 className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-2 group-hover:text-blue-600 transition-colors">{ev.title}</h6>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {!isPastDate ? (
+                <button
+                  type="button"
+                  onClick={() => handleCreateNewPlan(dStr)}
+                  className="w-full py-1 text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-blue-400 rounded-lg transition-colors"
+                >
+                  + เพิ่มงาน
+                </button>
+              ) : (
+                <div className="text-center py-1 bg-slate-100 dark:bg-slate-900/30 rounded-lg">
+                  <span className="text-[8px] text-slate-400 italic">ล็อกข้อมูล</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };
 
-  const getHeaderTitle = () => {
-    if (viewMode === 'month') return `${monthNames[month]} ${year}`;
-    if (viewMode === 'week') {
-      const start = new Date(currentDate); start.setDate(currentDate.getDate() - currentDate.getDay());
-      const end = new Date(start); end.setDate(start.getDate() + 6);
-      return `${start.getDate()} ${monthNames[start.getMonth()]} - ${end.getDate()} ${monthNames[end.getMonth()]} ${end.getFullYear()}`;
-    }
-    return `${currentDate.getDate()} ${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+  // ==========================================
+  // RENDER LAYOUT: DAY VIEW
+  // ==========================================
+  const renderDayView = () => {
+    const dStr = formatDateString(currentDate);
+    const dayEvents = db.contents ? db.contents.filter(item => item.date === dStr).sort((a,b) => a.time.localeCompare(b.time)) : [];
+    const isPastDate = dStr < todayStr;
+    const isToday = dStr === todayStr;
+
+    return (
+      <div className="max-w-xl mx-auto bg-white dark:bg-slate-800 p-6 rounded-2xl border dark:border-slate-700 shadow-sm space-y-6">
+        <div className="flex justify-between items-center border-b pb-3 dark:border-slate-700">
+          <div className="text-left">
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+              📅 ตารางประจำวันที่ {currentDate.getDate()} {monthNames[currentDate.getMonth()]} {currentDate.getFullYear() + 543}
+            </h3>
+            <p className="text-xs text-slate-400">
+              {isToday ? '🌟 รายการตารางงานวันนี้ของคุณ' : 'ตรวจสอบตารางคิวงาน'}
+            </p>
+          </div>
+
+          {!isPastDate ? (
+            <button
+              type="button"
+              onClick={() => handleCreateNewPlan(dStr)}
+              className="py-1.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+            >
+              + เพิ่มคอนเทนต์วันนี้
+            </button>
+          ) : (
+            <div className="py-1 px-3 bg-slate-100 dark:bg-slate-900/40 text-slate-400 rounded-xl text-[11px] italic">
+              🔒 สิทธิ์อ่านอย่างเดียว
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {dayEvents.length === 0 ? (
+            <div className="text-center py-12 border border-dashed dark:border-slate-700 rounded-2xl">
+              <p className="text-xs text-slate-400">ไม่มีแผนงานคอนเทนต์ในวันนี้เลยค่ะ</p>
+            </div>
+          ) : (
+            dayEvents.map(ev => (
+              <div
+                key={ev.id}
+                onClick={() => handleOpenSpecificContent(ev)}
+                className="flex items-center space-x-4 p-4 border dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 cursor-pointer hover:border-blue-500 hover:bg-white dark:hover:bg-slate-800 transition-all text-left group"
+              >
+                <div className="text-center min-w-[70px] border-r dark:border-slate-700 pr-3">
+                  <p className="text-xs font-black text-blue-600 dark:text-blue-400">{ev.time} น.</p>
+                  <p className="text-[10px] text-slate-400 font-bold pt-0.5">{ev.platform}</p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start gap-2">
+                    <h5 className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 transition-colors">{ev.title}</h5>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black text-white shrink-0 ${
+                      ev.status === 'เผยแพร่แล้ว' ? 'bg-emerald-600' : ev.status === 'พร้อมลง' ? 'bg-orange-500' : ev.status === 'ตัดต่อ' ? 'bg-blue-600' : 'bg-slate-400'
+                    }`}>
+                      {ev.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 line-clamp-1 pt-0.5">{ev.description || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
+                </div>
+                <div className="text-blue-500 font-bold text-xs shrink-0 pl-1">ดูรายละเอียด ↗</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm">
-        <div className="flex items-center space-x-2">
-          <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl border dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center">
-            <ChevronLeftIcon />
-          </button>
-          <button onClick={() => setCurrentDate(new Date())} className="px-3 py-2 text-xs font-bold border dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700">วันนี้</button>
-          <h3 className="text-base font-black px-2 min-w-[140px] text-center sm:text-left">{getHeaderTitle()}</h3>
-          <button onClick={() => changeMonth(1)} className="p-2 rounded-xl border dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center">
-            <ChevronRightIcon />
-          </button>
+    <div className="space-y-6">
+      {/* HEADER CONTROL BAR */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-lg">
+            <span>📅</span>
+          </div>
+          <div className="text-left">
+            <h2 className="text-sm font-black text-slate-800 dark:text-slate-100">ปฏิทินแผนงานคอนเทนต์</h2>
+            <p className="text-xs text-slate-400">จัดการงานระบบ 3 รูปแบบ (รายเดือน / รายสัปดาห์ / รายวัน)</p>
+          </div>
         </div>
 
-        <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
-          {[
-            { id: 'day', label: 'รายวัน' },
-            { id: 'week', label: 'รายสัปดาห์' },
-            { id: 'month', label: 'รายเดือน' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setViewMode(tab.id)}
-              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === tab.id ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3">
+          {/* แถบสลับมุมมอง */}
+          <div className="flex bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl">
+            {['month', 'week', 'day'].map((mode) => (
+              <button 
+                key={mode}
+                onClick={() => setViewMode(mode)} 
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                  viewMode === mode 
+                    ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-800 dark:text-slate-100' 
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {mode === 'month' ? 'รายเดือน' : mode === 'week' ? 'รายสัปดาห์' : 'รายวัน'}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center space-x-1">
+            <button onClick={() => handleNavigate(-1)} className="p-1.5 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-600 dark:text-slate-300 text-xs">◀</button>
+            <span className="text-xs font-black min-w-32 text-center text-slate-700 dark:text-slate-200">
+              {viewMode === 'month' && `${monthNames[currentMonth]} ${currentYear + 543}`}
+              {viewMode === 'week' && `สัปดาห์ที่ ${currentDate.getDate()} (${monthNames[currentMonth]})`}
+              {viewMode === 'day' && `${currentDate.getDate()} ${monthNames[currentMonth]} ${currentYear + 543}`}
+            </span>
+            <button onClick={() => handleNavigate(1)} className="p-1.5 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-600 dark:text-slate-300 text-xs">▶</button>
+          </div>
         </div>
       </div>
 
-      {viewMode === 'month' && renderMonthView()}
+      {/* CORE VIEW LAYOUT */}
+      {viewMode === 'month' && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="grid grid-cols-7 bg-slate-50/80 dark:bg-slate-900/40 border-b dark:border-slate-700 text-center py-2">
+            {dayNamesShort.map((d, index) => (
+              <span key={d} className={`text-xs font-bold ${index === 0 ? 'text-red-500' : index === 6 ? 'text-blue-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                {d}
+              </span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 border-l dark:border-slate-800">
+            {renderMonthGrid()}
+          </div>
+        </div>
+      )}
+
       {viewMode === 'week' && renderWeekView()}
+
       {viewMode === 'day' && renderDayView()}
 
+
+      {/* =======================================================
+          🎯 POPUP 1: MODAL แสดงรายการประจำวันเมื่อกดวันที่ (Month View)
+          ======================================================= */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className={`p-6 rounded-2xl shadow-xl max-w-md w-full border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="font-bold text-base">รายการแผนงานคอนเทนต์</h4>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center">
-                <CloseIcon />
-              </button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 flex items-center justify-center p-4">
+          <div className="p-6 rounded-2xl shadow-xl max-w-md w-full border relative bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 animate-fade-in">
+            <div className="flex justify-between items-center border-b pb-3 mb-4 dark:border-slate-700">
+              <h3 className="font-black text-base text-slate-800 dark:text-slate-100">📅 รายการแผนงานวันที่ {selectedDateStr}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-sm p-1">✕</button>
             </div>
+
             <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-              {selectedDayEvents.length === 0 ? (
-                <p className="text-sm text-slate-400 py-4 text-center">ไม่มีแผนงานในวันนี้</p>
-              ) : (
-                selectedDayEvents.map(ev => (
-                  <div key={ev.id} className="p-3 border dark:border-slate-700 rounded-xl space-y-1 bg-slate-50 dark:bg-slate-900/50">
-                    <div className="flex justify-between text-xs">
-                      <span className="font-bold text-blue-600 dark:text-blue-400">🕒 {ev.time} น.</span>
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] text-white ${getStatusColorClass(ev.status)}`}>{ev.status}</span>
+              {(() => {
+                const isPastDate = selectedDateStr < todayStr;
+
+                if (!selectedDayEvents || selectedDayEvents.length === 0) {
+                  return (
+                    <div className="text-center py-6 space-y-3">
+                      <p className="text-sm text-slate-400">ไม่มีแผนงานในวันนี้</p>
+                      {!isPastDate ? (
+                        <button 
+                          type="button"
+                          onClick={() => handleCreateNewPlan(selectedDateStr)}
+                          className="py-1.5 px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold rounded-xl text-xs transition-colors"
+                        >
+                          + เริ่มสร้างงานแรกวันนี้
+                        </button>
+                      ) : (
+                        <p className="text-[11px] text-red-500 italic">วันที่ในอดีต ระบบปิดล็อกการสร้างงานใหม่</p>
+                      )}
                     </div>
-                    <h5 className="text-sm font-bold pt-1">{ev.title}</h5>
-                    <p className="text-xs text-slate-400">{ev.description}</p>
-                    <div className="flex justify-between items-center text-[11px] pt-2 opacity-80">
-                      <span>🎬 ช่องทาง: {ev.platform}</span>
-                      <span>🏷️ {ev.tag}</span>
-                    </div>
-                  </div>
-                ))
-              )}
+                  );
+                }
+
+                return (
+                  <>
+                    {!isPastDate ? (
+                      <div className="mb-3">
+                        <button 
+                          type="button"
+                          onClick={() => handleCreateNewPlan(selectedDateStr)}
+                          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-sm transition-colors"
+                        >
+                          + เพิ่มคอนเทนต์งานใหม่สำหรับวันนี้
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mb-3 p-2 text-center bg-slate-100 dark:bg-slate-900/30 rounded-xl">
+                        <p className="text-[11px] text-slate-400 italic">🔒 คอนเทนต์ในอดีต (ดึงดูข้อมูลได้อย่างเดียว)</p>
+                      </div>
+                    )}
+
+                    {selectedDayEvents.map(ev => (
+                      <div 
+                        key={ev.id} 
+                        onClick={() => handleOpenSpecificContent(ev)}
+                        className="p-3 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1 bg-slate-50 dark:bg-slate-900/50 cursor-pointer hover:border-blue-500 transition-all text-left group"
+                      >
+                        <div className="flex justify-between text-xs">
+                          <span className="font-bold text-blue-600 dark:text-blue-400">⏰ {ev.time} น.</span>
+                          <span className={`px-2 py-0.5 rounded font-bold text-[10px] text-white ${
+                            ev.status === 'เผยแพร่แล้ว' ? 'bg-emerald-600' : ev.status === 'พร้อมลง' ? 'bg-orange-500' : ev.status === 'ตัดต่อ' ? 'bg-blue-600' : 'bg-slate-400'
+                          }`}>
+                            {ev.status}
+                          </span>
+                        </div>
+                        <h5 className="text-sm font-bold pt-1 text-slate-800 dark:text-slate-100 group-hover:text-blue-600">{ev.title}</h5>
+                        <p className="text-xs text-slate-400 line-clamp-1">{ev.description || 'ไม่มีรายละเอียด'}</p>
+                        <div className="text-right text-[11px] text-blue-500 font-bold pt-1 border-t border-slate-100 dark:border-slate-800/40 mt-1">
+                          ดึงข้อมูลงานเดี่ยว ↗
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           </div>
+        </div>
+      )}
+
+
+      {/* =======================================================
+          🎯 POPUP 2: SPECIFIC CONTENT VIEW (หน้าแสดงข้อมูลเดี่ยวชิ้นเดียวตาม Concept คลีน ๆ)
+          ======================================================= */}
+      {activeSingleContent && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative text-left space-y-4">
+            <div className="flex justify-between items-start border-b pb-3 dark:border-slate-700">
+              <div>
+                <span className={`px-2 py-0.5 rounded font-black text-[10px] text-white ${
+                  activeSingleContent.status === 'เผยแพร่แล้ว' ? 'bg-emerald-600' : activeSingleContent.status === 'พร้อมลง' ? 'bg-orange-500' : activeSingleContent.status === 'ตัดต่อ' ? 'bg-blue-600' : 'bg-slate-400'
+                }`}>
+                  {activeSingleContent.status}
+                </span>
+                <h3 className="font-black text-lg text-slate-800 dark:text-slate-100 mt-1">📁 รายละเอียดคอนเทนต์ชิ้นเดี่ยว</h3>
+              </div>
+              <button onClick={() => setActiveSingleContent(null)} className="text-slate-400 hover:text-slate-600 font-bold text-sm p-1">✕</button>
+            </div>
+
+            {/* ส่วนข้อมูลการ์ดชิ้นเดียวเน้น ๆ */}
+            <div className="space-y-2.5 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-100"><span className="text-slate-400 font-normal">ชื่องาน:</span> {activeSingleContent.title}</p>
+              <p><span className="text-slate-400">📅 กำหนดวัน:</span> {activeSingleContent.date} | ⏰ เวลา: {activeSingleContent.time} น.</p>
+              <p><span className="text-slate-400">📱 ช่องทางแพลตฟอร์ม:</span> {activeSingleContent.platform}</p>
+              <p><span className="text-slate-400">🏷️ แท็ก/หมวดหมู่:</span> {activeSingleContent.tag || '-'}</p>
+              <p><span className="text-slate-400">🛒 ตะกร้าสินค้า:</span> {activeSingleContent.product || 'ไม่มี'}</p>
+              {activeSingleContent.link && (
+                <p><span className="text-slate-400">🔗 ลิงก์สินค้า:</span> <a href={activeSingleContent.link} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">{activeSingleContent.link}</a></p>
+              )}
+              <div className="border-t dark:border-slate-700 pt-2 mt-2">
+                <p className="font-bold text-slate-400 mb-0.5">📝 รายละเอียด/เนื้อหา:</p>
+                <p className="whitespace-pre-line text-slate-700 dark:text-slate-200">{activeSingleContent.description || 'ไม่มีข้อมูลรายละเอียดงานชิ้นนี้'}</p>
+              </div>
+            </div>
+
+            {/* 🛠️ Action Hub: ปุ่มควบคุม แก้ไข และ ลบ ทันทีจากตรงนี้เลย */}
+            <div className="flex items-center justify-end space-x-2 border-t pt-4 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => handleDeleteContent(activeSingleContent.id)}
+                className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/20 dark:text-red-400 font-bold rounded-xl text-xs transition-all"
+              >
+                🗑️ ลบงานชิ้นนี้
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenEditForm}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all"
+              >
+                🛠️ กดแก้ไข (Edit)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* =======================================================
+          🎯 POPUP 3: INLINE EDIT FORM (ฟอร์มแก้ไขข้อมูลที่จะเด้งซ้อนเมื่อกดปุ่ม Edit)
+          ======================================================= */}
+      {isEditFormOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSaveEdit} className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl text-left space-y-4 max-h-[90vh] overflow-y-auto">
+            <h4 className="font-black text-base text-slate-800 dark:text-slate-100 border-b pb-2 dark:border-slate-700">🛠️ แก้ไขฟอร์มคอนเทนต์</h4>
+            
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-slate-500">ชื่องานคอนเทนต์ *</label>
+                <input type="text" value={editFormData.title} onChange={e => setEditFormData({...editFormData, title: e.target.value})} className="w-full p-2 border rounded-xl dark:bg-slate-900 dark:border-slate-700" required />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-500">วันที่ลงตาราง *</label>
+                  <input type="date" value={editFormData.date} onChange={e => setEditFormData({...editFormData, date: e.target.value})} className="w-full p-2 border rounded-xl dark:bg-slate-900 dark:border-slate-700" required />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-500">เวลาปล่อยคลิป</label>
+                  <input type="time" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} className="w-full p-2 border rounded-xl dark:bg-slate-900 dark:border-slate-700" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-500">แพลตฟอร์ม ช่องทาง</label>
+                  <select value={editFormData.platform} onChange={e => setEditFormData({...editFormData, platform: e.target.value})} className="w-full p-2 border rounded-xl dark:bg-slate-900 dark:border-slate-700">
+                    <option value="TikTok">TikTok</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="YouTube">YouTube</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-500">สถานะงาน</label>
+                  <select value={editFormData.status} onChange={e => setEditFormData({...editFormData, status: e.target.value})} className="w-full p-2 border rounded-xl dark:bg-slate-900 dark:border-slate-700">
+                    <option value="ร่าง">ร่าง</option>
+                    <option value="ตัดต่อ">ตัดต่อ</option>
+                    <option value="พร้อมลง">พร้อมลง</option>
+                    <option value="เผยแพร่แล้ว">เผยแพร่แล้ว</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-500">รายละเอียดเพิ่มเติม</label>
+                <textarea rows="3" value={editFormData.description} onChange={e => setEditFormData({...editFormData, description: e.target.value})} className="w-full p-2 border rounded-xl dark:bg-slate-900 dark:border-slate-700"></textarea>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 border-t pt-3 dark:border-slate-700">
+              <button type="button" onClick={() => setIsEditFormOpen(false)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-xl text-xs font-bold">ยกเลิก</button>
+              <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm">บันทึกการแก้ไข</button>
+            </div>
+          </form>
         </div>
       )}
     </div>
   );
 }
-
 // --- VIEW: CONTENT PLAN ---
 function ContentPlanView() {
-  const { db, setDb, showDialog, darkMode } = useContext(AppContext);
+  const { db, setDb, showDialog, darkMode, selectedDateForPlan, setSelectedDateForPlan } = useContext(AppContext);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ทั้งหมด');
   const [formData, setFormData] = useState({ id: '', title: '', description: '', date: '', time: '12:00', status: 'ร่าง', platform: 'TikTok', tag: '', product: 'ไม่มี', link: '' });
   const [modalOpen, setModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (selectedDateForPlan) {
+      setFormData(prev => ({
+        ...prev,
+        id: '',
+        date: selectedDateForPlan
+      }));
+      setModalOpen(true);
+      setSelectedDateForPlan(null); 
+    }
+  }, [selectedDateForPlan, setSelectedDateForPlan]);
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -828,13 +1192,14 @@ function ContentPlanView() {
                   {['ร่าง', 'ตัดต่อ', 'พร้อมลง', 'เผยแพร่แล้ว'].map(st => <option key={st} value={st} className="text-slate-800 bg-white">{st}</option>)}
                 </select>
               </div>
+       
               <h4 className="font-bold text-base mb-1">{c.title}</h4>
               <p className="text-xs text-slate-400 dark:text-slate-400 line-clamp-2 mb-3 leading-relaxed">{c.description || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
               
               <div className="space-y-1 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl text-xs mb-3">
-                <p className="text-slate-500">📅 วันที่ลง: <span className="font-bold text-slate-800 dark:text-slate-200">{c.date} | {c.time} น.</span></p>
-                <p className="text-slate-500">🛍️ สินค้า: <span className="font-semibold text-blue-600 dark:text-blue-400">{c.product}</span></p>
-                <p className="text-slate-500">🏷️ แท็ก: <span className="opacity-90">{c.tag || '-'}</span></p>
+                <p className="text-slate-500">วันที่ลง: <span className="font-bold text-slate-800 dark:text-slate-200">{c.date} | {c.time} น.</span></p>
+                <p className="text-slate-500">สินค้า: <span className="font-semibold text-blue-600 dark:text-blue-400">{c.product}</span></p>
+                <p className="text-slate-500">แท็ก: <span className="opacity-90">{c.tag || '-'}</span></p>
               </div>
             </div>
 
@@ -865,6 +1230,7 @@ function ContentPlanView() {
                 <label className="block text-xs font-bold mb-1 opacity-80">ชื่องาน / ชื่อคลิป *</label>
                 <input type="text" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" placeholder="เช่น รีวิวโต๊ะคอมใหม่" />
               </div>
+     
               <div>
                 <label className="block text-xs font-bold mb-1 opacity-80">รายละเอียดบทความ / สคริปต์ด่วน</label>
                 <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 h-20" placeholder="เขียนบันทึกย่อเกี่ยวกับคลิปนี้..." />
@@ -900,7 +1266,7 @@ function ContentPlanView() {
                 <label className="block text-xs font-bold mb-1 opacity-80">สินค้าที่ใช้รีวิว</label>
                 <select value={formData.product} onChange={e => setFormData({ ...formData, product: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="ไม่มี">-- ไม่เลือกสินค้า / ไม่มี --</option>
-                  {db.products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  {db.products && db.products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                 </select>
               </div>
 
@@ -936,7 +1302,7 @@ function PublishedView() {
   return (
     <div className="space-y-4">
       <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 rounded-2xl text-xs font-medium border border-emerald-100 dark:border-emerald-900">
-        💡 หน้ารวมผลงานที่เผยแพร่แล้วโดยอัตโนมัติ (ระบบดึงข้อมูลมาจาก Content Plan ที่เซ็ตสถานะเป็น "เผยแพร่แล้ว") คุณไม่สามารถเพิ่มข้อมูลตรงจากหน้านี้ได้
+        หน้ารวมผลงานที่เผยแพร่แล้วโดยอัตโนมัติ (ระบบดึงข้อมูลมาจาก Content Plan ที่เซ็ตสถานะเป็น "เผยแพร่แล้ว") คุณไม่สามารถเพิ่มข้อมูลตรงจากหน้านี้ได้
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -945,13 +1311,13 @@ function PublishedView() {
             <div>
               <div className="aspect-video bg-slate-100 dark:bg-slate-700 flex flex-col items-center justify-center p-4 text-center border-b dark:border-slate-600 relative">
                 <span className="absolute top-2 left-2 text-[10px] font-black tracking-wide px-2 py-0.5 rounded bg-black/60 text-white uppercase">{item.platform}</span>
-                <span className="text-xs font-bold opacity-40">🎬 Video Content Thumbnail</span>
+                <span className="text-xs font-bold opacity-40">Video Content Thumbnail</span>
               </div>
               <div className="p-5">
                 <h4 className="font-bold text-sm line-clamp-1 mb-1">{item.title}</h4>
-                <p className="text-xs text-slate-400">📅 เผยแพร่เมื่อ: {item.date} • {item.time} น.</p>
+                <p className="text-xs text-slate-400">เผยแพร่เมื่อ: {item.date} • {item.time} น.</p>
                 {item.product && item.product !== 'ไม่มี' && (
-                  <span className="inline-block mt-3 text-[11px] font-medium text-blue-500 bg-blue-50 dark:bg-blue-950/50 px-2.5 py-0.5 rounded-md">🛍️ {item.product}</span>
+                  <span className="inline-block mt-3 text-[11px] font-medium text-blue-500 bg-blue-50 dark:bg-blue-950/50 px-2.5 py-0.5 rounded-md">{item.product}</span>
                 )}
               </div>
             </div>
@@ -984,7 +1350,6 @@ function ChannelView() {
   const handleSave = (e) => {
     e.preventDefault();
     if (!formData.name) return;
-
     if (formData.id) {
       setDb({ ...db, channels: db.channels.map(ch => ch.id === formData.id ? formData : ch) });
     } else {
@@ -1056,7 +1421,7 @@ function ChannelView() {
               </div>
  
               <div>
-                <label className="block text-xs font-bold mb-1">ลิงก์ช่อง</label>
+                <label className="block w-full text-xs font-bold mb-1">ลิงก์ช่อง</label>
                 <input type="url" value={formData.link} onChange={e => setFormData({ ...formData, link: e.target.value })} className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 bg-transparent outline-none" placeholder="https://..." />
               </div>
               <div>
@@ -1075,7 +1440,7 @@ function ChannelView() {
   );
 }
 
-// --- NEW VIEW: PRODUCT STOCK (WITH INTEGRATED CUSTOM CATEGORIES MANAGEMENT) ---
+// --- VIEW: PRODUCT STOCK ---
 function ProductStockView() {
   const { db, setDb, showDialog, darkMode } = useContext(AppContext);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1084,7 +1449,6 @@ function ProductStockView() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editIdx, setEditIdx] = useState(null);
   const [selectedFilterCategory, setSelectedFilterCategory] = useState('ทั้งหมด');
-
   const [formData, setFormData] = useState({ 
     id: '', name: '', note: '', price: '', source: 'ซื้อเอง', category: 'ไม่มีหมวดหมู่', dateReceived: '' 
   });
@@ -1099,7 +1463,6 @@ function ProductStockView() {
     setModalOpen(false);
   };
 
-  // ฟังก์ชันลบสินค้า
   const deleteProduct = (id) => {
     showDialog('confirm', 'ยืนยันการลบ', 'คุณต้องการลบสินค้านี้ใช่หรือไม่?', () => {
       setDb({ ...db, products: db.products.filter(item => item.id !== id) });
@@ -1131,14 +1494,12 @@ function ProductStockView() {
 
   return (
     <div className="space-y-4">
-      {/* ส่วนบน: ค้นหาและปุ่ม */}
       <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm flex flex-wrap gap-2">
         <input className="flex-1 p-2 border rounded-xl dark:bg-slate-900" placeholder="ค้นหา..." onChange={(e) => setSearch(e.target.value)} />
-        <button onClick={() => setManageCategoriesOpen(!manageCategoriesOpen)} className="p-2 border rounded-xl">📁 หมวดหมู่</button>
+        <button onClick={() => setManageCategoriesOpen(!manageCategoriesOpen)} className="p-2 border rounded-xl">หมวดหมู่</button>
         <button onClick={() => { setFormData({ id: '', name: '', note: '', price: '', source: 'ซื้อเอง', category: 'ไม่มีหมวดหมู่', dateReceived: '' }); setModalOpen(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold">+ เพิ่มสินค้า</button>
       </div>
 
-      {/* ส่วนจัดการหมวดหมู่ (สวยงามและเป็นสัดส่วน) */}
       {manageCategoriesOpen && (
         <div className="p-5 border border-dashed rounded-2xl bg-slate-50 dark:bg-slate-900/50 space-y-4">
            <form onSubmit={handleSaveCategory} className="flex gap-2">
@@ -1156,7 +1517,6 @@ function ProductStockView() {
         </div>
       )}
 
-      {/* ปุ่มกรองหมวดหมู่ */}
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setSelectedFilterCategory('ทั้งหมด')} className={`px-4 py-1.5 rounded-full text-xs font-bold ${selectedFilterCategory === 'ทั้งหมด' ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'bg-slate-200'}`}>ทั้งหมด</button>
         {db.productCategories.map((cat, idx) => (
@@ -1164,7 +1524,6 @@ function ProductStockView() {
         ))}
       </div>
 
-      {/* รายการสินค้า */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredProducts.map(p => (
           <div key={p.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl border shadow-sm flex flex-col justify-between">
@@ -1182,14 +1541,13 @@ function ProductStockView() {
         ))}
       </div>
 
-      {/* MODAL เพิ่ม/แก้ไขสินค้า */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSave} className="p-6 bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg space-y-3">
             <h3 className="font-bold text-lg">{formData.id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า'}</h3>
-            {/* ฟอร์มกรอกข้อมูลตามเดิมของคุณ */}
             <label className="text-xs font-bold">ชื่อสินค้า</label>
             <input className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} required />
+           
             <label className="text-xs font-bold">รายละเอียด</label>
             <textarea className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} />
             <div className="grid grid-cols-2 gap-2">
@@ -1200,6 +1558,7 @@ function ProductStockView() {
               <div><label className="text-xs font-bold">หมวดหมู่</label><select className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}><option value="ไม่มีหมวดหมู่">ไม่มีหมวดหมู่</option>{db.productCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div>
               <div><label className="text-xs font-bold">วันที่</label><input type="date" className="w-full p-2 border rounded-xl dark:bg-slate-900" value={formData.dateReceived} onChange={e=>setFormData({...formData, dateReceived: e.target.value})} /></div>
             </div>
+           
             <div className="flex justify-end gap-2 pt-4">
               <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 border rounded-xl">ยกเลิก</button>
               <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-xl">บันทึก</button>
@@ -1220,7 +1579,6 @@ function JournalView() {
   const handleSave = (e) => {
     e.preventDefault();
     if (!formData.title || !formData.content) return;
-
     if (formData.id) {
       setDb({ ...db, journals: db.journals.map(j => j.id === formData.id ? formData : j) });
     } else {
@@ -1310,7 +1668,6 @@ function JournalView() {
 // --- VIEW: BACKUP / RESTORE JSON ---
 function BackupView() {
   const { db, setDb, showDialog } = useContext(AppContext);
-
   const exportData = () => {
     try {
       const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(db, null, 2))}`;
